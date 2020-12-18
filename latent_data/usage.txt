@@ -1,0 +1,5 @@
+(mean,U)
+
+Y=mm(U.t(),x.t()).t()+mean
+sat Y[0:16]
+hei Y[16:32]

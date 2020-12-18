@@ -1,0 +1,1 @@
+python train.py --name test0603_2 --dataroot datasets/Taiwan_1-31to1 --model pix2pix  --netG unet_128 --input_nc 1 --output_nc 1 --load_size 256 --preprocess none --batch_size 4 --lr 0.0003 --niter 100 --niter_decay 100 --print_freq 100 --gpu_ids 1 --no_dropout False

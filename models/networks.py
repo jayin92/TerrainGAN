@@ -116,7 +116,7 @@ def init_net(net, init_type='normal', init_gain=0.02, gpu_ids=[]):
     return net
 
 
-def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[]):
+def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[], use_mult=False):
     """Create a generator
 
     Parameters:
@@ -150,10 +150,12 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
         net = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9)
     elif netG == 'resnet_6blocks':
         net = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=6)
+    elif netG == 'unet_64':
+        net = UnetGenerator(input_nc, output_nc, 6, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
     elif netG == 'unet_128':
         net = UnetGenerator(input_nc, output_nc, 7, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
     elif netG == 'unet_256':
-        net = UnetGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
+        net = UnetGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout, use_mult=use_mult)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -176,7 +178,7 @@ def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal'
 
     Our current implementation provides three types of discriminators:
         [basic]: 'PatchGAN' classifier described in the original pix2pix paper.
-        It can classify whether 70×70 overlapping patches are real or fake.
+        It can classify whether 70x70 overlapping patches are real or fake.
         Such a patch-level discriminator architecture has fewer parameters
         than a full-image discriminator and can work on arbitrarily-sized images
         in a fully convolutional fashion.
@@ -272,7 +274,7 @@ class GANLoss(nn.Module):
                 loss = -prediction.mean()
             else:
                 loss = prediction.mean()
-        return loss
+        return loss 
 
 
 def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', constant=1.0, lambda_gp=10.0):
@@ -351,8 +353,8 @@ class ResnetGenerator(nn.Module):
 
         mult = 2 ** n_downsampling
         for i in range(n_blocks):       # add ResNet blocks
-
-            model += [ResnetBlock(ngf * mult, padding_type=padding_type, norm_layer=norm_layer, use_dropout=use_dropout, use_bias=use_bias)]
+            
+            model += [ResnetBlock(ngf * mult, padding_type=padding_type, norm_layer=norm_layer, use_dropout=use_dropout, use_bias=use_bias,mult=(i==4))]
 
         for i in range(n_downsampling):  # add upsampling layers
             mult = 2 ** (n_downsampling - i)
@@ -370,13 +372,13 @@ class ResnetGenerator(nn.Module):
 
     def forward(self, input):
         """Standard forward"""
-        return self.model(input)
+        return self.model(input)+input
 
 
 class ResnetBlock(nn.Module):
     """Define a Resnet block"""
 
-    def __init__(self, dim, padding_type, norm_layer, use_dropout, use_bias):
+    def __init__(self, dim, padding_type, norm_layer, use_dropout, use_bias,mult=False):
         """Initialize the Resnet block
 
         A resnet block is a conv block with skip connections
@@ -387,7 +389,7 @@ class ResnetBlock(nn.Module):
         super(ResnetBlock, self).__init__()
         self.conv_block = self.build_conv_block(dim, padding_type, norm_layer, use_dropout, use_bias)
 
-    def build_conv_block(self, dim, padding_type, norm_layer, use_dropout, use_bias):
+    def build_conv_block(self, dim, padding_type, norm_layer, use_dropout, use_bias,mult=False):
         """Construct a convolutional block.
 
         Parameters:
@@ -424,7 +426,8 @@ class ResnetBlock(nn.Module):
         else:
             raise NotImplementedError('padding [%s] is not implemented' % padding_type)
         conv_block += [nn.Conv2d(dim, dim, kernel_size=3, padding=p, bias=use_bias), norm_layer(dim)]
-
+        if mult:
+            conv_block+=[Mult(dim)]
         return nn.Sequential(*conv_block)
 
     def forward(self, x):
@@ -432,11 +435,29 @@ class ResnetBlock(nn.Module):
         out = x + self.conv_block(x)  # add skip connections
         return out
 
+class Mult(nn.Module):
+    def __init__(self,nc):
+        super(Mult,self).__init__()
+        
+        self.register_parameter(name='exp',
+                                param=torch.nn.Parameter(torch.diag(torch.ones(nc)).unsqueeze(-1).unsqueeze(-1)))
+                                
+        #self.exp=torch.diag(torch.ones(nc)).unsqueeze(-1).unsqueeze(-1).to('cuda:1')
+        '''self.register_parameter(name='weight',
+                                param=torch.nn.Parameter(torch.ones(nc).unsqueeze(-1).unsqueeze(-1)))
+                                '''
+        self.register_parameter(name='bias',
+                                param=torch.nn.Parameter(torch.zeros(nc).unsqueeze(-1).unsqueeze(-1)))
+        self.relu=nn.ReLU()
+    def forward(self,x):
+        #return self.leaky_relu(x.unsqueeze(-3).pow(self.exp).prod(1)*self.weight+self.bias)
+        x=self.relu(x)+0.1
+        return x.unsqueeze(-3).pow(self.exp).prod(1)+self.bias
 
 class UnetGenerator(nn.Module):
     """Create a Unet-based generator"""
 
-    def __init__(self, input_nc, output_nc, num_downs, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False):
+    def __init__(self, input_nc, output_nc, num_downs, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, use_mult=False):
         """Construct a Unet generator
         Parameters:
             input_nc (int)  -- the number of channels in input images
@@ -450,19 +471,22 @@ class UnetGenerator(nn.Module):
         It is a recursive process.
         """
         super(UnetGenerator, self).__init__()
+        self.output_nc = output_nc
         # construct unet structure
         unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=None, norm_layer=norm_layer, innermost=True)  # add the innermost layer
         for i in range(num_downs - 5):          # add intermediate layers with ngf * 8 filters
             unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer, use_dropout=use_dropout)
         # gradually reduce the number of filters from ngf * 8 to ngf
-        unet_block = UnetSkipConnectionBlock(ngf * 4, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
+        unet_block = UnetSkipConnectionBlock(ngf * 4, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer, mult=use_mult)#True)
         unet_block = UnetSkipConnectionBlock(ngf * 2, ngf * 4, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
         unet_block = UnetSkipConnectionBlock(ngf, ngf * 2, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
-        self.model = UnetSkipConnectionBlock(output_nc, ngf, input_nc=input_nc, submodule=unet_block, outermost=True, norm_layer=norm_layer)  # add the outermost layer
-
+        self.model = UnetSkipConnectionBlock(output_nc, ngf, input_nc=input_nc, submodule=unet_block, outermost=True, norm_layer=norm_layer,tanh=(output_nc==3))  # add the outermost layer
     def forward(self, input):
         """Standard forward"""
-        return self.model(input)
+        if(self.output_nc == 3):
+            return self.model(input)
+        else:
+            return self.model(input) + input[:, :1, :, :]
 
 
 class UnetSkipConnectionBlock(nn.Module):
@@ -472,7 +496,7 @@ class UnetSkipConnectionBlock(nn.Module):
     """
 
     def __init__(self, outer_nc, inner_nc, input_nc=None,
-                 submodule=None, outermost=False, innermost=False, norm_layer=nn.BatchNorm2d, use_dropout=False):
+                 submodule=None, outermost=False, innermost=False, norm_layer=nn.BatchNorm2d, use_dropout=False, mult=False, tanh=False):
         """Construct a Unet submodule with skip connections.
 
         Parameters:
@@ -505,7 +529,10 @@ class UnetSkipConnectionBlock(nn.Module):
                                         kernel_size=4, stride=2,
                                         padding=1)
             down = [downconv]
-            up = [uprelu, upconv, nn.Tanh()]
+            if tanh:
+                up = [uprelu, upconv, nn.Tanh()]
+            else:
+                up = [uprelu, upconv]
             model = down + [submodule] + up
         elif innermost:
             upconv = nn.ConvTranspose2d(inner_nc, outer_nc,
@@ -525,6 +552,8 @@ class UnetSkipConnectionBlock(nn.Module):
                 model = down + [submodule] + up + [nn.Dropout(0.5)]
             else:
                 model = down + [submodule] + up
+        if mult:
+            model = model + [Mult(outer_nc)]
 
         self.model = nn.Sequential(*model)
 
@@ -561,6 +590,8 @@ class NLayerDiscriminator(nn.Module):
         for n in range(1, n_layers):  # gradually increase the number of filters
             nf_mult_prev = nf_mult
             nf_mult = min(2 ** n, 8)
+            #if n==2:
+                #sequence+=[Mult(ndf* nf_mult_prev)]
             sequence += [
                 nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult, kernel_size=kw, stride=2, padding=padw, bias=use_bias),
                 norm_layer(ndf * nf_mult),
@@ -613,3 +644,77 @@ class PixelDiscriminator(nn.Module):
     def forward(self, input):
         """Standard forward."""
         return self.net(input)
+
+class MyDataParallel(nn.DataParallel):
+    def __getattr__(self, name):
+        if name == 'module':
+            return super().__getattr__('module')
+        else:
+            return getattr(self.module, name)
+
+
+class VAEEncoder(nn.Module):
+    def block(self,innc,outnc,conv_type='3',bn=0,dropout_rate=0,leakyrelu=0.1,relu=True,wn=0):
+        #use_bias=bn==0
+        use_bias=1
+        layers=[]
+        if conv_type=='1':
+            layers+=[nn.Conv2d(innc, outnc, kernel_size=1,stride=1, padding=0, bias=use_bias)]
+        elif conv_type=='3':
+            layers+=[nn.Conv2d(innc, outnc, kernel_size=3,stride=1, padding=1, bias=use_bias)]
+        elif conv_type=='down':
+            layers+=[nn.Conv2d(innc, outnc, kernel_size=4,stride=2, padding=1, bias=use_bias)]
+            #layers+=[nn.Conv2d(innc, outnc, kernel_size=3,stride=1, padding=1, bias=use_bias)]
+            #layers+=[torch.nn.MaxPool2d(2, stride=2)]
+        if wn:
+            layers[0]=nn.utils.weight_norm(layers[0])
+        if relu:
+            layers+=[nn.LeakyReLU(leakyrelu)]            
+        if bn>0:
+            layers+=[nn.BatchNorm2d(outnc,momentum=bn)]
+        if dropout_rate>0:
+            layers+=[nn.Dropout(dropout_rate)]
+        return layers
+        
+    def __init__(self,innc,outnc,nc,bn=0.5,dropout_rate=0,wn=0):
+        super(VAEEncoder, self).__init__()
+        depth=len(nc)
+        cnn=[]
+        self.bn=bn
+        self.dropout_rate=dropout_rate
+        for i in range(depth):
+            if i==0:
+                block=\
+                self.block(innc,nc[i],'3',bn,dropout_rate,wn=wn)+\
+                self.block(nc[i],nc[i],'3',bn,dropout_rate,wn=wn)+\
+                self.block(nc[i],nc[i],'down',bn,dropout_rate,wn=wn)
+            else:
+                block=\
+                self.block(nc[i-1],nc[i],'down',bn,dropout_rate,wn=wn)
+            cnn+=block
+        self.cnn=nn.Sequential(*cnn)
+        self.bottleneckMiu=nn.Sequential(*(self.block(nc[-1],nc[-1],'1',bn,dropout_rate,wn=wn)
+                                         +self.block(nc[-1],outnc,'1',0,dropout_rate,relu=False,wn=wn)))
+        self.bottleneckVar=nn.Sequential(*(self.block(nc[-1],nc[-1],'1',bn,dropout_rate,wn=wn)
+                                         +self.block(nc[-1],outnc,'1',0,dropout_rate,relu=False,wn=wn)))
+        self.upsampler=torch.nn.Upsample(scale_factor=2 ** depth, mode="bicubic")
+                              
+
+                
+    def forward(self, t):
+        t=self.cnn(t)
+        self.miu=self.bottleneckMiu(t)
+        if self.training:
+            self.log_var=self.bottleneckVar(t)
+            self.var=torch.clamp(torch.exp(self.log_var),0,10000)
+            return self.upsampler(self.miu + torch.normal(torch.zeros_like(self.miu), torch.ones_like(self.var)) * torch.sqrt(self.var))
+        else:
+            return self.upsampler(self.miu)
+    
+    def loss(self, lossWeight=1, lower_var=0):
+        return lossWeight * torch.sum(self.miu ** 2 + self.var - self.log_var - 1.0) / 2 + self.var.sum() * lower_var
+    def rmsMiu(self):
+        return (self.miu**2).mean().sqrt().item()
+    def meanVar(self):
+        return self.var.mean().item()
+    

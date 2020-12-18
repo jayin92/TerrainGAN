@@ -32,6 +32,9 @@ if __name__ == '__main__':
 
     model = create_model(opt)      # create a model given opt.model and other options
     model.setup(opt)               # regular setup: load and print networks; create schedulers
+    # import torch
+    # model.netG.load_state_dict(torch.load("/home/host/pytorch-CycleGAN-and-pix2pix/checkpoints/test0603_2/latest_net_G.pth"),strict=False)
+    # model.netD.load_state_dict(torch.load("/home/host/pytorch-CycleGAN-and-pix2pix/checkpoints/test0603_2/latest_net_D.pth"),strict=False)
     visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
     total_iters = 0                # the total number of training iterations
 
