@@ -1,10 +1,14 @@
+"""
+空照圖和高度圖一起train
+輸入是模糊圖，輸出是空照和清晰圖
+"""
 import torch
 from .base_model import BaseModel
 from . import networks
 import random
 import numpy as np
 
-class VAEPix2PixModel(BaseModel):
+class VAEPix2PixModel2(BaseModel):
     """ This class implements the pix2pix model, for learning a mapping from input images to output images given paired data.
 
     The model training requires '--dataset_mode aligned' dataset.

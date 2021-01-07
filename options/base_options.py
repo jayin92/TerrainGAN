@@ -22,7 +22,7 @@ class BaseOptions():
         # basic parameters
         parser.add_argument('--dataroot', help='path to images (should have subfolders trainA, trainB, valA, valB, etc)')
         parser.add_argument('--name', type=str, default='experiment_name', help='name of the experiment. It decides where to store samples and models')
-        parser.add_argument('--gpu_ids', type=str, default='0', help='gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU')
+        parser.add_argument('--gpu_ids', type=str, default='1', help='gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU')
         parser.add_argument('--checkpoints_dir', type=str, default='./checkpoints', help='models are saved here')
         # model parameters
         parser.add_argument('--model', type=str, default='cycle_gan', help='chooses which model to use. [cycle_gan | pix2pix | test | colorization]')
@@ -54,6 +54,9 @@ class BaseOptions():
         parser.add_argument('--load_iter', type=int, default='0', help='which iteration to load? if load_iter > 0, the code will load models by iter_[load_iter]; otherwise, the code will load models by [epoch]')
         parser.add_argument('--verbose', action='store_true', help='if specified, print more debugging information')
         parser.add_argument('--suffix', default='', type=str, help='customized suffix: opt.name = opt.name + suffix: e.g., {model}_{netG}_size{load_size}')
+        parser.add_argument('--attention', action='store_true', help='use self attention')
+        parser.add_argument('--mult_skip_conn', action='store_true', help='multiplying skip connection')
+        parser.add_argument('--useVAE2', action='store_true', help='use new encoder after 0104')
         self.initialized = True
         return parser
 

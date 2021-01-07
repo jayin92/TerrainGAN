@@ -4,7 +4,7 @@ from . import networks
 import random
 import numpy as np
 
-class VAEPix2PixModel(BaseModel):
+class mVAEPix2PixModel(BaseModel):
     """ This class implements the pix2pix model, for learning a mapping from input images to output images given paired data.
 
     The model training requires '--dataset_mode aligned' dataset.
@@ -55,14 +55,10 @@ class VAEPix2PixModel(BaseModel):
             self.model_names = ['S','G']
         # define networks (both generator and discriminator)
         latent_dim = 8
-        self.beta = 0.001
-        self.epoch=0# used to schedule beta 
-        
-        
-        self.netS = networks.MyDataParallel(networks.VAEEncoder2(opt.input_nc+opt.output_nc,latent_dim,[32,64,128,256,256,256,8,8]),self.gpu_ids)if opt.useVAE2 else networks.MyDataParallel(networks.VAEEncoder(opt.input_nc+opt.output_nc,latent_dim,[32,64,128,256,256,256,8,8]),self.gpu_ids)
-        
-        self.netG = networks.define_G(opt.input_nc+latent_dim, opt.output_nc, opt.ngf, opt.netG, opt.norm,not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids,att=opt.attention,multsc=opt.mult_skip_conn)
-                                  
+        self.beta = 0.000005
+        self.netS = networks.MyDataParallel(networks.VAEEncoder(opt.input_nc+opt.output_nc,latent_dim,[32,64,128,256,256,256,8,8]),self.gpu_ids)
+        self.netG = networks.define_G(opt.input_nc+latent_dim, opt.output_nc, opt.ngf, opt.netG, opt.norm,
+                                      not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
 
         if self.isTrain:  # define a discriminator; conditional GANs need to take both input and output images; Therefore, #channels for D is input_nc + output_nc
             self.netD = networks.define_D(opt.input_nc + opt.output_nc + latent_dim, opt.ndf, opt.netD,
@@ -80,9 +76,8 @@ class VAEPix2PixModel(BaseModel):
             self.optimizers.append(self.optimizer_S)
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
-            self.epoch=0
     
-    def set_input(self, input,epoch=0):
+    def set_input(self, input):
         """Unpack input data from the dataloader and perform necessary pre-processing steps.
 
         Parameters:
@@ -90,7 +85,6 @@ class VAEPix2PixModel(BaseModel):
 
         The option 'direction' can be used to swap images in domain A and domain B.
         """
-        self.epoch=epoch
         AtoB = self.opt.direction == 'AtoB'
         self.real_A = input['A' if AtoB else 'B'].to(self.device)
         self.real_B = input['B' if AtoB else 'A'].to(self.device)
@@ -117,13 +111,13 @@ class VAEPix2PixModel(BaseModel):
             
             
     def forward(self, latent=None):
-        rand_bias=np.random.uniform(-2,2)
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
         if latent == None:
-            self.style = self.netS(torch.cat([self.real_A+rand_bias if self.netG.module.output_nc==3 else self.real_A, self.real_B],dim=1)) #+ torch.tensor((np.random.rand(1, 16, 1, 1) * 2 - 1) / 10, dtype=torch.float).to("cuda:0")
+            self.style = self.netS(torch.cat([self.real_A, self.real_B],dim=1)) #+ torch.tensor((np.random.rand(1, 16, 1, 1) * 2 - 1) / 10, dtype=torch.float).to("cuda:0")
+            self.fake_B = self.netG(torch.cat([self.real_A, self.style],dim=1))
         else:
             self.style = latent
-        self.fake_B = self.netG(torch.cat([self.real_A+rand_bias if self.netG.module.output_nc==3 else self.real_A, self.style],dim=1))#random bias
+            self.fake_B = self.netG(torch.cat([self.real_A, self.style],dim=1))
     def backward_D(self):
         """Calculate GAN loss for the discriminator"""
         # Fake; stop backprop to the generator by detaching fake_B
@@ -137,7 +131,7 @@ class VAEPix2PixModel(BaseModel):
         # combine loss and calculate gradients
         self.loss_D = (self.loss_D_fake + self.loss_D_real) * 0.5
         self.loss_D.backward()
-    
+
     def backward_G(self):
         """Calculate GAN and L1 loss for the generator"""
         # First, G(A) should fake the discriminator
@@ -146,7 +140,7 @@ class VAEPix2PixModel(BaseModel):
         self.loss_G_GAN = self.criterionGAN(pred_fake, True)
         # Second, G(A) = B
         self.loss_G_L1 = self.criterionL1(self.fake_B, self.real_B) * self.opt.lambda_L1
-        self.loss_KLD = self.netS.loss(self.beta*(0.001+(self.epoch%50)/50.0))
+        self.loss_KLD = self.netS.loss(self.beta)
         self.loss_miu=self.netS.rmsMiu()
         self.loss_var=self.netS.meanVar()
         # combine loss and calculate gradients
