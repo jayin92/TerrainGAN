@@ -116,7 +116,7 @@ def init_net(net, init_type='normal', init_gain=0.02, gpu_ids=[]):
     return net
 
 
-def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[], use_mult=False,att=False,multsc=False):
+def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[], use_mult=False,att=False,multsc=False,use_bias_anyway=0):
     """Create a generator
 
     Parameters:
@@ -155,9 +155,11 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
     elif netG == 'unet_128':
         net = UnetGenerator(input_nc, output_nc, 7, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
     elif netG == 'unet_256':
-        net = UnetGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout, use_mult=use_mult,att=att,multsc=multsc)
+        net = UnetGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout, use_mult=use_mult,att=att,multsc=multsc,use_bias_anyway=use_bias_anyway)
     elif netG == 'unet_2':
-        net = UnetGenerator2(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout, use_mult=use_mult,att=att,multsc=multsc)
+        net = UnetGenerator2(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout, use_mult=use_mult,att=att,multsc=multsc,use_bias_anyway=use_bias_anyway)
+    elif netG == 'unet_3':
+        net = UnetGenerator3(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout, use_mult=use_mult,att=att,multsc=multsc,use_bias_anyway=use_bias_anyway)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -493,7 +495,7 @@ class UnetGenerator(nn.Module):
 class UnetGenerator2(nn.Module):
     """視野較小的unet"""
 
-    def __init__(self, input_nc, output_nc, num_downs, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, use_mult=False,att=False,multsc=False):
+    def __init__(self, input_nc, output_nc, num_downs, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, use_mult=False,att=False,multsc=False,use_bias_anyway=0):
         """Construct a Unet generator
         Parameters:
             input_nc (int)  -- the number of channels in input images
@@ -509,20 +511,22 @@ class UnetGenerator2(nn.Module):
         super(UnetGenerator2, self).__init__()
         self.output_nc = output_nc
         # construct unet structure
-        unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=None, norm_layer=norm_layer, innermost=True)  # add the innermost layer
+        unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=None, norm_layer=norm_layer, innermost=True,use_bias_anyway=use_bias_anyway)  # add the innermost layer
         for i in range(num_downs - 5):          # add intermediate layers with ngf * 8 filters
-            unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer, use_dropout=use_dropout,multsc=multsc,stride2=(num_downs-i)%2)
+            unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer, use_dropout=use_dropout,multsc=multsc,stride2=(num_downs-i)%2,use_bias_anyway=use_bias_anyway)
         # gradually reduce the number of filters from ngf * 8 to ngf
-        unet_block = UnetSkipConnectionBlock(ngf * 4, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer, mult=use_mult,att=att,multsc=multsc)#True)
-        unet_block = UnetSkipConnectionBlock(ngf * 2, ngf * 4, input_nc=None, submodule=unet_block, norm_layer=norm_layer,multsc=multsc,stride2=0)
-        unet_block = UnetSkipConnectionBlock(ngf, ngf * 2, input_nc=None, submodule=unet_block, norm_layer=norm_layer,multsc=multsc)
-        self.model = UnetSkipConnectionBlock(output_nc, ngf, input_nc=input_nc, submodule=unet_block, outermost=True, norm_layer=norm_layer,tanh=(output_nc==3),multsc=multsc,stride2=0)  # add the outermost layer
+        unet_block = UnetSkipConnectionBlock(ngf * 4, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer, mult=use_mult,att=att,multsc=multsc,use_bias_anyway=use_bias_anyway)#True)
+        unet_block = UnetSkipConnectionBlock(ngf * 2, ngf * 4, input_nc=None, submodule=unet_block, norm_layer=norm_layer,multsc=multsc,stride2=0,use_bias_anyway=use_bias_anyway)
+        unet_block = UnetSkipConnectionBlock(ngf, ngf * 2, input_nc=None, submodule=unet_block, norm_layer=norm_layer,multsc=multsc,use_bias_anyway=use_bias_anyway)
+        self.model = UnetSkipConnectionBlock(output_nc, ngf, input_nc=input_nc, submodule=unet_block, outermost=True, norm_layer=norm_layer,tanh=(output_nc==3),multsc=multsc,stride2=0,use_bias_anyway=use_bias_anyway)  # add the outermost layer
     def forward(self, input):
         """Standard forward"""
         if(self.output_nc == 3):
             return self.model(input)
         else:
             return self.model(input) + input[:, :1, :, :]
+
+
 
 
 class UnetSkipConnectionBlock(nn.Module):
@@ -532,19 +536,8 @@ class UnetSkipConnectionBlock(nn.Module):
     """
 
     def __init__(self, outer_nc, inner_nc, input_nc=None,
-                 submodule=None, outermost=False, innermost=False, norm_layer=nn.BatchNorm2d, use_dropout=False, mult=False, tanh=False,att=False,multsc=False,stride2=1):
-        """Construct a Unet submodule with skip connections.
+                 submodule=None, outermost=False, innermost=False, norm_layer=nn.BatchNorm2d, use_dropout=False, mult=False, tanh=False,att=False,multsc=False,stride2=1,use_bias_anyway=0):
 
-        Parameters:
-            outer_nc (int) -- the number of filters in the outer conv layer
-            inner_nc (int) -- the number of filters in the inner conv layer
-            input_nc (int) -- the number of channels in input images/features
-            submodule (UnetSkipConnectionBlock) -- previously defined submodules
-            outermost (bool)    -- if this module is the outermost module
-            innermost (bool)    -- if this module is the innermost module
-            norm_layer          -- normalization layer
-            user_dropout (bool) -- if use dropout layers.
-        """
         super(UnetSkipConnectionBlock, self).__init__()
         self.outermost = outermost
         self.innermost = innermost
@@ -553,6 +546,8 @@ class UnetSkipConnectionBlock(nn.Module):
             use_bias = norm_layer.func == nn.InstanceNorm2d
         else:
             use_bias = norm_layer == nn.InstanceNorm2d
+        if use_bias_anyway:
+            use_bias=1
         if input_nc is None:
             input_nc = outer_nc
         kernel_size=4 if stride2 else 3
@@ -605,6 +600,116 @@ class UnetSkipConnectionBlock(nn.Module):
             return self.model(x)
         elif self.multsc and not self.innermost:
             a=self.model(x)
+            return torch.cat([self.a(x)*a,x], 1)
+        else:
+            return torch.cat([x, self.model(x)], 1)
+        
+latent_dim=4
+class UnetGenerator3(nn.Module):
+    """把style code當成gate"""
+
+    def __init__(self, input_nc, output_nc, num_downs, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, use_mult=False,att=False,multsc=False,use_bias_anyway=0):
+
+        super(UnetGenerator3, self).__init__()
+        self.output_nc = output_nc
+        # construct unet structure
+        unet_block = UnetSkipConnectionBlock3(ngf * 8, ngf * 8, input_nc=None, submodule=None, norm_layer=norm_layer, innermost=True,use_bias_anyway=use_bias_anyway,depth=3)  # add the innermost layer
+        for i in range(num_downs - 5):          # add intermediate layers with ngf * 8 filters
+            unet_block = UnetSkipConnectionBlock3(ngf * 8, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer, use_dropout=use_dropout,multsc=multsc,stride2=(num_downs-i)%2,use_bias_anyway=use_bias_anyway,depth=(num_downs - 2-i)//2)
+        # gradually reduce the number of filters from ngf * 8 to ngf
+        unet_block = UnetSkipConnectionBlock3(ngf * 4, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer, mult=use_mult,att=att,multsc=multsc,use_bias_anyway=use_bias_anyway,depth=1)#True)
+        unet_block = UnetSkipConnectionBlock3(ngf * 2, ngf * 4, input_nc=None, submodule=unet_block, norm_layer=norm_layer,multsc=multsc,stride2=0,use_bias_anyway=use_bias_anyway,depth=1)
+        unet_block = UnetSkipConnectionBlock3(ngf, ngf * 2, input_nc=None, submodule=unet_block, norm_layer=norm_layer,multsc=multsc,use_bias_anyway=use_bias_anyway,depth=0)
+        self.model = UnetSkipConnectionBlock3(output_nc, ngf, input_nc=input_nc, submodule=unet_block, outermost=True, norm_layer=norm_layer,tanh=(output_nc==3),multsc=multsc,stride2=0,use_bias_anyway=use_bias_anyway,depth=0)
+    def forward(self, input):
+        self.model.latent=input[:,1:latent_dim+1]
+        return self.model(input)
+
+
+class StyleGate(nn.Module):
+    def __init__(self, out_dim, depth):
+        super(StyleGate,self).__init__()
+        self.fc_sigmoid=nn.Sequential(torch.nn.AvgPool2d(2**depth,stride=2**depth),
+                                      nn.Conv2d(latent_dim,out_dim//2,kernel_size=1),
+                                      nn.LeakyReLU(0.01),
+                                      nn.Conv2d(out_dim//2,out_dim,kernel_size=1),
+                                      nn.Sigmoid())
+    def forward(self,x):
+        return self.fc_sigmoid(self.latent)*x
+
+class UnetSkipConnectionBlock3(nn.Module):
+
+    def __init__(self, outer_nc, inner_nc, input_nc=None,
+                 submodule=None, outermost=False, innermost=False, norm_layer=nn.BatchNorm2d, use_dropout=False, mult=False, tanh=False,att=False,multsc=False,stride2=1,use_bias_anyway=0,depth=0):
+
+        super(UnetSkipConnectionBlock3, self).__init__()
+        self.outermost = outermost
+        self.innermost = innermost
+        self.multsc=multsc
+
+        use_bias=1
+        if input_nc is None:
+            input_nc = outer_nc
+        kernel_size=4 if stride2 else 3
+        stride=2 if stride2 else 1
+        downconv = nn.Conv2d(input_nc, inner_nc,kernel_size=kernel_size, stride=stride,padding=1, bias=use_bias)
+        downrelu = nn.LeakyReLU(0.2, True)
+        downnorm = norm_layer(inner_nc)
+        uprelu = nn.ReLU(True)
+        upnorm = norm_layer(outer_nc)
+        self.style_gates=[]
+        self.submodule=submodule
+        if outermost:
+            upconv = nn.ConvTranspose2d(inner_nc * 2, outer_nc,
+                                        kernel_size=kernel_size, stride=stride,
+                                        padding=1)
+            down = [downconv,downrelu]
+            if tanh:
+                up = [ upconv, nn.Tanh()]
+            else:
+                up = [ upconv]
+            model = down + [submodule] + up
+            
+        elif innermost:
+            upconv = nn.ConvTranspose2d(inner_nc, outer_nc,
+                                        kernel_size=kernel_size, stride=stride,
+                                        padding=1, bias=use_bias)
+            down = [ downconv,downrelu]
+            up = [ upconv,uprelu, upnorm]
+            model = down + up
+            
+        else:
+            up_gate=StyleGate(outer_nc,depth)
+            self.style_gates+=[up_gate]
+            
+            upconv = nn.ConvTranspose2d(inner_nc * 2, outer_nc,
+                                        kernel_size=kernel_size, stride=stride,
+                                        padding=1, bias=use_bias)
+            down = [ downconv, downrelu, downnorm]
+            up = [ upconv, uprelu,upnorm,up_gate]
+
+            if use_dropout:
+                model = down + [submodule] + up + [nn.Dropout(0.5)]
+            else:
+                model = down + [submodule] + up
+        if mult:
+            model = model + [Mult(outer_nc)]
+        if att:
+            model+=[Self_Attn(outer_nc,'relu')]
+
+        self.model = nn.Sequential(*model)
+        if self.multsc:
+            self.a=nn.Conv2d(outer_nc, outer_nc, kernel_size=3,stride=1, padding=1, bias=True)
+
+    def forward(self, x):
+        if not self.innermost:
+            self.submodule.latent=self.latent
+        for g in self.style_gates:
+            g.latent=self.latent
+        if self.outermost:
+            return self.model(x)
+        elif self.multsc and not self.innermost:
+            a=self.model(xt)
             return torch.cat([self.a(x)*a,x], 1)
         else:
             return torch.cat([x, self.model(x)], 1)
@@ -745,10 +850,10 @@ class VAEEncoder2(nn.Module):
                               
 
                 
-    def forward(self, t):
+    def forward(self, t,sample=False):
         t=self.cnn(t)
         self.miu=self.bottleneckMiu(t)
-        if self.training:
+        if self.training or sample:
             self.log_var=self.bottleneckVar(t)
             self.var=torch.clamp(torch.exp(self.log_var),0,10000)
             return self.upsampler(self.miu + torch.normal(torch.zeros_like(self.miu), torch.ones_like(self.var)) * torch.sqrt(self.var))
@@ -764,7 +869,7 @@ class VAEEncoder2(nn.Module):
 
 
 class VAEEncoder(nn.Module):
-    def block(self,innc,outnc,conv_type='3',bn=0,dropout_rate=0,leakyrelu=0.1,relu=True,wn=0):
+    def block(self,innc,outnc,conv_type='3',bn=0,dropout_rate=0,leakyrelu=0.1,relu=True,wn=0,ins_norm=0):
         #use_bias=bn==0
         use_bias=1
         layers=[]
@@ -782,11 +887,13 @@ class VAEEncoder(nn.Module):
             layers+=[nn.LeakyReLU(leakyrelu)]            
         if bn>0:
             layers+=[nn.BatchNorm2d(outnc,momentum=bn)]
+        if ins_norm>0:
+            layers+=[nn.InstanceNorm2d(outnc,momentum=ins_norm)]
         if dropout_rate>0:
             layers+=[nn.Dropout(dropout_rate)]
         return layers
         
-    def __init__(self,innc,outnc,nc,bn=0.5,dropout_rate=0,wn=0):
+    def __init__(self,innc,outnc,nc,bn=0,dropout_rate=0,wn=0,ins_norm=0.1):
         super(VAEEncoder, self).__init__()
         depth=len(nc)
         cnn=[]
@@ -795,27 +902,27 @@ class VAEEncoder(nn.Module):
         for i in range(depth):
             if i==0:
                 block=\
-                self.block(innc,nc[i],'3',bn,dropout_rate,wn=wn)+\
-                self.block(nc[i],nc[i],'3',bn,dropout_rate,wn=wn)+\
-                self.block(nc[i],nc[i],'down',bn,dropout_rate,wn=wn)
+                self.block(innc,nc[i],'3',bn,dropout_rate,wn=wn,ins_norm=ins_norm)+\
+                self.block(nc[i],nc[i],'3',bn,dropout_rate,wn=wn,ins_norm=ins_norm)+\
+                self.block(nc[i],nc[i],'down',bn,dropout_rate,wn=wn,ins_norm=ins_norm)
             else:
                 block=\
-                self.block(nc[i-1],nc[i],'down',bn,dropout_rate,wn=wn)
+                self.block(nc[i-1],nc[i],'down',bn,dropout_rate,wn=wn,ins_norm=ins_norm)
             cnn+=block
         self.cnn=nn.Sequential(*cnn)
-        self.bottleneckMiu=nn.Sequential(*(self.block(nc[-1],nc[-1],'1',bn,dropout_rate,wn=wn)
-                                         +self.block(nc[-1],outnc,'1',0,dropout_rate,relu=False,wn=wn)))
-        self.bottleneckVar=nn.Sequential(*(self.block(nc[-1],nc[-1],'1',bn,dropout_rate,wn=wn)
-                                         +self.block(nc[-1],outnc,'1',0,dropout_rate,relu=False,wn=wn)))
+        self.bottleneckMiu=nn.Sequential(*(self.block(nc[-1],nc[-1],'1',bn,dropout_rate,wn=wn,ins_norm=ins_norm)
+                                         +self.block(nc[-1],outnc,'1',0,0,relu=False,wn=wn)))
+        self.bottleneckVar=nn.Sequential(*(self.block(nc[-1],nc[-1],'1',bn,dropout_rate,wn=wn,ins_norm=ins_norm)
+                                         +self.block(nc[-1],outnc,'1',0,0,relu=False,wn=wn)))
         self.upsampler=torch.nn.Upsample(scale_factor=2 ** depth, mode="bicubic")
                               
 
                 
-    def forward(self, t):
+    def forward(self, t,sample=False):
         t=self.cnn(t)
         self.miu=self.bottleneckMiu(t)
-        if self.training:
-            self.log_var=self.bottleneckVar(t)
+        if self.training or sample:
+            self.log_var=self.bottleneckVar(t)-8 # small initial var
             self.var=torch.clamp(torch.exp(self.log_var),0,10000)
             return self.upsampler(self.miu + torch.normal(torch.zeros_like(self.miu), torch.ones_like(self.var)) * torch.sqrt(self.var))
         else:
