@@ -35,7 +35,7 @@ class SatHeiDataset(BaseDataset):
 
         A = A_transform(A)
         B = B_transform(B)
-        C=C_transform(C)
+        C = C_transform(C)
 
         return {'A': A, 'B': B,'C':C, 'A_paths': path, 'B_paths': path, 'C_paths': path}
 

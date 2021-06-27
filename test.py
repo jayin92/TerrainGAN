@@ -73,5 +73,5 @@ if __name__ == '__main__':
             print('processing (%04d)-th image... %s' % (i, img_path))
         save_images(webpage, visuals, img_path, aspect_ratio=opt.aspect_ratio, width=opt.display_winsize)
     webpage.save()  # save the HTML
-    print("Time per image: {} ms".format(res / len(dataset)))
+    print("Time per image: {} ms".format(res / min(opt.num_test, len(dataset))))
     

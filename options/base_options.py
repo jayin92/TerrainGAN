@@ -56,9 +56,10 @@ class BaseOptions():
         parser.add_argument('--suffix', default='', type=str, help='customized suffix: opt.name = opt.name + suffix: e.g., {model}_{netG}_size{load_size}')
         parser.add_argument('--attention', action='store_true', help='use self attention')
         parser.add_argument('--mult_skip_conn', action='store_true', help='multiplying skip connection')
-        parser.add_argument('--useVAE2', action='store_true', help='use new encoder after 0104')
+        parser.add_argument('--useVAE3', action='store_true', help='vae with skip conn')
         parser.add_argument('--use_bias_anyway', action='store_true', help='use bias whether batchnorm is used')
         parser.add_argument('--add_real', action='store_true', help='u')
+        parser.add_argument('--align_minmax', action='store_true', help='u')
         self.initialized = True
         return parser
 
