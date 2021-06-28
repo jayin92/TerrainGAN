@@ -1,4 +1,4 @@
-# jayin92/pix2pix-terrain-generator：利用生成對抗網路生成擬真的山脈地形 
+# jayin92/pix2pix-terrain-generator：利用VAE-pix2pix生成擬真的山脈模型
 
 ## 摘要 Abstract
 本研究利用 NASA 的 SRTM 1 Arc-Second 資料集來收集全球各地的地形高度圖(heightmap),也利用 MapTiler 網站收集相對應的衛星空照圖,用這些收集的圖像,訓練我們建構的 VAE-pix2pix 模型。VAE-pix2pix 為 Variational Autoencoder (VAE)及 pix2pix (為一個Conditional Generative Adversarial Network)結合的模型,能將人工繪製的高度圖加上真實山脈應有的細節(包含尖銳的山脊、山壁上的紋路、連續的河流網路等......),並生成出相對應的擬真衛星空照圖。相較於原 pix2pix 模型,VAE-pix2pix 所生成的高度圖及衛星空照圖會更接近於真實世界的地形高度圖及衛星空照圖,同時 VAE-pix2pix 模型也能透過改變 latent code 的數值來生成出不同風格的高度圖及空照圖,如地貌的顏色或雪線的高度等,這些都增加模型生成圖像的多樣性。為了使我們建構的模型能更廣泛的被應用,我們在 Unity 上開發了 Unity客戶端,其生成的 mesh 可以讓使用者直接應用於遊戲的場景,簡化了遊戲中生成擬真山脈模型的任務。
