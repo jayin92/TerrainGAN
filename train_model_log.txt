@@ -1,0 +1,45 @@
+test_1007: batch_size=10, epoch_num=200, no data augmentation, w/ periodic kld
+    Avg. Loss for heightmaps: (L1, L2, L1 std, L2 std) = (4.045, 32.933, 1.209, 16.295)
+    Avg. Loss for satellite : (L1, L2, L1 std, L2 std) = (28.941, 1947.898, 12.125, 1449.141
+test_1010: batch_size=10, epoch_num=200, w/ data augmentation, no periodic kld
+    Avg. Loss for heightmaps: (L1, L2, L1 std., L2 std.) = (3.754, 28.72, 1.131, 14.422)
+    Avg. Loss for satellite : (L1, L2, L1 std., L2 std.) = (27.509, 1760.26, 11.012, 1218.314
+test_1012: batch_size=10, epoch_num=200, no data augmentation, no periodic kld, only two images concat
+
+
+
+test_1014: batch_size=10, epoch_num=200, w/ data augmentation, CNNEncoder: output_dim=16*16, only two images concat, 
+    Avg. Loss for heightmaps: (L1, L2, L1 std, L2 std) = (3.366, 23.161, 0.973, 11.025)
+    Avg. Loss for satellite : (L1, L2, L1 std, L2 std) = (20.1, 982.711, 7.3, 682.118)
+
+test_1014_2: batch_size=10, epoch_num=200, w/ data augmentation, CNNEncoder: output_dim=4*4, only two images concat, 
+    Avg. Loss for heightmaps: (L1, L2, L1 std, L2 std) = (3.515, 25.244, 0.991, 11.843)
+    Avg. Loss for satellite : (L1, L2, L1 std, L2 std) = (25.463, 1533.811, 9.193, 985.209)
+
+test_1015: batch_size=10, epoch_num=200, w/ data augmentation, CNNEncoder: output_dim=3*4*4, only two images concat, hei l1 loss weight: 10
+    Avg. Loss for heightmaps: (L1, L2, L1 std, L2 std) = (3.042, 19.506, 0.888, 9.525)
+    Avg. Loss for satellite : (L1, L2, L1 std, L2 std) = (25.093, 1533.393, 9.589, 1185.373)
+
+test_1015_2: batch_size=10, epoch_num=200, w/ data augmentation, CNNEncoder: output_dim=3*1*1, only two images concat
+    Avg. Loss for heightmaps: (L1, L2, L1 std, L2 std) = (3.724, 27.764, 1.008, 12.503)
+    Avg. Loss for satellite : (L1, L2, L1 std, L2 std) = (28.317, 1877.134, 12.207, 1468.664)
+
+test_1016: batch_size=10, epoch_num=200, w/ data augmentation, CNNEncoder: output_dim=8*1*1, only two images concat
+    Avg. Loss for heightmaps: (L1, L2, L1 std, L2 std) = (4.394, 56.663, 4.842, 221.192)
+    Avg. Loss for satellite : (L1, L2, L1 std, L2 std) = (28.027, 1818.889, 11.354, 1361.725)
+
+test_1021: batch_size=10, epoch_num=200, w/ data augmentation, CNNEncoder: output_dim=3*8*8, only two images concat, num_filter=[64, 64, 64, 64, 64, 32]
+    Avg. Loss for heightmaps: (L1, L2, L1 std, L2 std) = (3.467, 24.564, 0.992, 11.675)
+    Avg. Loss for satellite : (L1, L2, L1 std, L2 std) = (21.15, 1070.798, 7.186, 647.626)
+
+test_1021_2: batch_size=10, epoch_num=200, w/ data augmentation, CNNEncoder: output_dim=3*8*8, only two images concat, num_filter=[64, 64, 64, 64, 64, 64]
+    Avg. Loss for heightmaps: (L1, L2, L1 std, L2 std) = (3.466, 24.491, 0.997, 11.859)
+    Avg. Loss for satellite : (L1, L2, L1 std, L2 std) = (21.283, 1095.908, 7.472, 750.881)
+
+test_1028: batch_size=10, epoch_num=200, w/ data augmentation, CNNEncoder: output_dim=8*4*4, only two images concat, num_filter=[64, 64, 128, 128, 64, 64]
+    
+
+
+test_1102: batch_size=10, epoch_num=200, w/ data augmentation, CNNEncoder: output_dim=8*4*4, only two images concat, num_filter=[64, 64, 128, 256, 128, 64, 64]
+    Avg. Loss for heightmaps: (L1, L2, L1 std, L2 std) = (3.587, 26.106, 1.018, 12.544)
+    Avg. Loss for satellite : (L1, L2, L1 std, L2 std) = (24.443, 1442.809, 9.037, 955.358)

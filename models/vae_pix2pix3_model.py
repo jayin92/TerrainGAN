@@ -35,7 +35,7 @@ def blur(x, k):
     return torch.nn.functional.conv2d(pad(x), kernel)
 
 
-class VAEPix2Pix2Model(BaseModel):
+class VAEPix2Pix3Model(BaseModel):
     """ This class implements the pix2pix model, for learning a mapping from input images to output images given paired data.
 
     The model training requires '--dataset_mode aligned' dataset.
@@ -98,8 +98,8 @@ class VAEPix2Pix2Model(BaseModel):
         # vae_nc=[32,64,128,256,256,256,8,8]
         # vae_nc=[64,128,256,512,512,512,512]
         vae_nc = np.array([1, 2, 4, 8, 8, 8, 8, 8]) * 32
-        self.netS = networks.MyDataParallel(networks.VAEEncoder3(5, latent_dim, vae_nc), self.gpu_ids)if opt.useVAE3 else networks.MyDataParallel(
-            networks.VAEEncoder(5, latent_dim, vae_nc), self.gpu_ids)
+        self.netS = networks.MyDataParallel(networks.VAEEncoder3(4, latent_dim, vae_nc), self.gpu_ids) if opt.useVAE3 else networks.MyDataParallel(
+            networks.VAEEncoder(4, latent_dim, vae_nc), self.gpu_ids)
 
         self.netG = networks.define_G(1+latent_dim, 4, opt.ngf, opt.netG, opt.norm, not opt.no_dropout, opt.init_type,
                                       opt.init_gain, self.gpu_ids, att=opt.attention, multsc=opt.mult_skip_conn, use_bias_anyway=opt.use_bias_anyway)
@@ -133,19 +133,19 @@ class VAEPix2Pix2Model(BaseModel):
         self.real_B = input['B'].to(self.device)  # sat
         self.real_C = input['C'].to(self.device)  # hei
         self.image_paths = input['A_paths']
-        if self.opt.isTrain:
-            if random.randint(0, 1):
-                self.real_A = torch.flip(self.real_A, [2])
-                self.real_B = torch.flip(self.real_B, [2])
-                self.real_C = torch.flip(self.real_C, [2])
-            if random.randint(0, 1):
-                self.real_A = torch.flip(self.real_A, [3])
-                self.real_B = torch.flip(self.real_B, [3])
-                self.real_C = torch.flip(self.real_C, [3])
-            if random.randint(0, 1):
-                self.real_A = self.real_A.transpose(2, 3)
-                self.real_B = self.real_B.transpose(2, 3)
-                self.real_C = self.real_C.transpose(2, 3)
+        # if self.opt.isTrain:
+        #     if random.randint(0, 1):
+        #         self.real_A = torch.flip(self.real_A, [2])
+        #         self.real_B = torch.flip(self.real_B, [2])
+        #         self.real_C = torch.flip(self.real_C, [2])
+        #     if random.randint(0, 1):
+        #         self.real_A = torch.flip(self.real_A, [3])
+        #         self.real_B = torch.flip(self.real_B, [3])
+        #         self.real_C = torch.flip(self.real_C, [3])
+        #     if random.randint(0, 1):
+        #         self.real_A = self.real_A.transpose(2, 3)
+        #         self.real_B = self.real_B.transpose(2, 3)
+        #         self.real_C = self.real_C.transpose(2, 3)
         if self.align_minmax:
             for i in range(self.real_A.shape[1]):
                 min = self.real_A[i].min()
@@ -161,7 +161,7 @@ class VAEPix2Pix2Model(BaseModel):
         rand_blur = np.random.uniform(1, 2)
         # self.real_A=blur(self.real_A,rand_blur)
         self.style = self.netS(
-            torch.cat([self.real_A, self.real_B, self.real_C], dim=1))
+            torch.cat([self.real_B, self.real_C], dim=1))
         fake_BC = self.netG(torch.cat([self.real_A, self.style], dim=1))
         self.fake_B = self.tanh(fake_BC[:, 0:3])
         self.fake_C = torch.clamp(
@@ -211,7 +211,7 @@ class VAEPix2Pix2Model(BaseModel):
         #             self.real_C=self.real_C * rand_scale + rand_bias
         if latent == None:
             self.style = self.netS(torch.cat(
-                [self.real_A, self.real_B, self.real_C], dim=1), sample=(self.epoch > self.start_var))
+                [self.real_B, self.real_C], dim=1), sample=(self.epoch > self.start_var))
             if test:
                 self.style.retain_grad()
         else:
@@ -252,7 +252,7 @@ class VAEPix2Pix2Model(BaseModel):
         pred_fake = self.netD(fake_AB)
         self.loss_G_GAN = self.criterionGAN(pred_fake, True)
         # Second, G(A) = B
-        self.loss_G_L1 = (self.criterionL1(self.fake_B, self.real_B) +
+        self.loss_G_L1 = (self.criterionL1(self.fake_B, self.real_B)*self.sat_weight +
                           self.criterionL1(self.fake_C, self.real_C)) * self.opt.lambda_L1
         # self.loss_KLD = self.netS.loss(self.beta*(min(1, (0.001+((self.epoch-1) % 100)/50.0))
         #                                if self.epoch > self.start_var else 0.001))  # periodic beta sceduling

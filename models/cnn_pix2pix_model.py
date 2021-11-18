@@ -35,7 +35,7 @@ def blur(x, k):
     return torch.nn.functional.conv2d(pad(x), kernel)
 
 
-class VAEPix2Pix2Model(BaseModel):
+class CNNPix2PixModel(BaseModel):
     """ This class implements the pix2pix model, for learning a mapping from input images to output images given paired data.
 
     The model training requires '--dataset_mode aligned' dataset.
@@ -79,35 +79,30 @@ class VAEPix2Pix2Model(BaseModel):
         """
         BaseModel.__init__(self, opt)
         # specify the training losses you want to print out. The training/test scripts will call <BaseModel.get_current_losses>
-        self.loss_names = ['G_GAN', 'G_L1', 'D_real',
-                           'D_fake', 'KLD', 'miu', 'std', 'latent_grad']
+        self.loss_names = ['G_GAN', 'G_L1', 'D_real', 'D_fake']
         # specify the images you want to save/display. The training/test scripts will call <BaseModel.get_current_visuals>
-        self.visual_names = ['real_A', 'real_B', 'real_C', 'fake_B', 'fake_C']
+        self.visual_names = ['real_A', 'real_B', 'real_C', 'fake_B', 'fake_C'] # , 'style']
         # specify the models you want to save to the disk. The training/test scripts will call <BaseModel.save_networks> and <BaseModel.load_networks>
         if self.isTrain:
             self.model_names = ['S', 'G', 'D']
         else:  # during test time, only load G
             self.model_names = ['S', 'G']
         # define networks (both generator and discriminator)
-        latent_dim = 8
-        networks.latent_dim = latent_dim
-        self.beta = 0.004
-        self.start_var = 50
-        self.sat_weight = 1
-
+       
         # vae_nc=[32,64,128,256,256,256,8,8]
         # vae_nc=[64,128,256,512,512,512,512]
-        vae_nc = np.array([1, 2, 4, 8, 8, 8, 8, 8]) * 32
-        self.netS = networks.MyDataParallel(networks.VAEEncoder3(5, latent_dim, vae_nc), self.gpu_ids)if opt.useVAE3 else networks.MyDataParallel(
-            networks.VAEEncoder(5, latent_dim, vae_nc), self.gpu_ids)
+        # vae_nc = np.array([1, 2, 4, 8, 8, 8, 8, 8]) * 32
+        self.out_dim = 8
+        self.netS = networks.MyDataParallel(networks.CNNEncoder(in_w=256, in_h=256, out_w=256, out_h=256, in_dim=4, out_dim=self.out_dim, 
+                                            num_layer=8, num_filter=[64, 128, 256, 256, 128, 64]), self.gpu_ids)
 
-        self.netG = networks.define_G(1+latent_dim, 4, opt.ngf, opt.netG, opt.norm, not opt.no_dropout, opt.init_type,
+        self.netG = networks.define_G(1 + self.out_dim, 4, opt.ngf, opt.netG, opt.norm, not opt.no_dropout, opt.init_type,
                                       opt.init_gain, self.gpu_ids, att=opt.attention, multsc=opt.mult_skip_conn, use_bias_anyway=opt.use_bias_anyway)
 
         self.tanh = torch.nn.Tanh()
 
         if self.isTrain:  # define a discriminator; conditional GANs need to take both input and output images; Therefore, #channels for D is input_nc + output_nc
-            self.netD = networks.define_D(5 + latent_dim, opt.ndf, opt.netD,
+            self.netD = networks.define_D(5 + self.out_dim, opt.ndf, opt.netD,
                                           opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
             # define loss functions
             self.criterionGAN = networks.GANLoss(opt.gan_mode).to(self.device)
@@ -154,52 +149,33 @@ class VAEPix2Pix2Model(BaseModel):
                 self.real_C[i] = ((self.real_C[i]-min)/(max-min+0.000001))*2-1
 
     def test(self, blur_=3):
-        self.visual_names = ['real_A', 'real_B', 'real_C',
-                             'fake_B', 'fake_C', 'rand_lat_B', 'rand_lat_C']
+        self.visual_names = ['real_A', 'real_B', 'real_C', 'fake_B', 'fake_C'] #, 'style']
         self.netS.eval()
         self.netG.eval()
-        rand_blur = np.random.uniform(1, 2)
+        # rand_blur = np.random.uniform(1, 2)
         # self.real_A=blur(self.real_A,rand_blur)
         self.style = self.netS(
-            torch.cat([self.real_A, self.real_B, self.real_C], dim=1))
+            torch.cat([self.real_B, self.real_C], dim=1))
+        
+        # print(self.real_B) # sat
+        # print(self.real_C) # hei
+
+        # for i in range(8):
+        #     print(f"{i}: {self.style[0][i][0][0]}")
+
         fake_BC = self.netG(torch.cat([self.real_A, self.style], dim=1))
         self.fake_B = self.tanh(fake_BC[:, 0:3])
         self.fake_C = torch.clamp(
             (fake_BC[:, 3:4])+(self.real_A if self.add_real else 0), -1, 1)
 
-        self.style = torch.randn_like(
-            self.style[:, :, 0:1, 0:1]).repeat(1, 1, 256, 256)
-        fake_BC = self.netG(torch.cat([self.real_A, self.style], dim=1))
-        self.rand_lat_B = self.tanh(fake_BC[:, 0:3])
-        self.rand_lat_C = torch.clamp(
-            fake_BC[:, 3:4]+(self.real_A if self.add_real else 0), -1, 1)
+        # self.style = torch.randn_like(
+        #     self.style[:, :, 0:1, 0:1]).repeat(1, 1, 256, 256)
+        # fake_BC = self.netG(torch.cat([self.real_A, self.style], dim=1))
+        # self.rand_lat_B = self.tanh(fake_BC[:, 0:3])
+        # self.rand_lat_C = torch.clamp(
+        #     fake_BC[:, 3:4]+(self.real_A if self.add_real else 0), -1, 1)
 
-    def get_current_losses(self):
-        self.forward(test=1)
-        self.loss_latent_grad = 0
-        self.optimizer_S.zero_grad()
-        (self.fake_B[:0]).mean().backward(retain_graph=True)
-        self.loss_latent_grad += (self.style.grad**2).mean()
-        self.optimizer_S.zero_grad()
-        (self.fake_B[:1]).mean().backward(retain_graph=True)
-        self.loss_latent_grad += (self.style.grad**2).mean()
-        self.optimizer_S.zero_grad()
-        (self.fake_B[:2]).mean().backward(retain_graph=True)
-        self.loss_latent_grad += (self.style.grad**2).mean()
-        self.optimizer_S.zero_grad()
-        (self.fake_C).mean().backward()
-        self.loss_latent_grad += (self.style.grad**2).mean()
-
-        self.loss_latent_grad = self.loss_latent_grad**0.5
-        self.loss_miu = self.netS.rmsMiu()
-        self.loss_std = self.netS.meanVar()**0.5
-
-        errors_ret = OrderedDict()
-        for name in self.loss_names:
-            if isinstance(name, str):
-                # float(...) works for both scalar tensor and float number
-                errors_ret[name] = float(getattr(self, 'loss_' + name))
-        return errors_ret
+    
 
     def forward(self, latent=None, test=False):
         #         rand_bias=np.random.normal(0,2)
@@ -210,8 +186,7 @@ class VAEPix2Pix2Model(BaseModel):
         #             self.real_A=self.real_A * rand_scale + rand_bias
         #             self.real_C=self.real_C * rand_scale + rand_bias
         if latent == None:
-            self.style = self.netS(torch.cat(
-                [self.real_A, self.real_B, self.real_C], dim=1), sample=(self.epoch > self.start_var))
+            self.style = self.netS(torch.cat([self.real_B, self.real_C], dim=1))
             if test:
                 self.style.retain_grad()
         else:
@@ -219,7 +194,7 @@ class VAEPix2Pix2Model(BaseModel):
 
         fake_BC = self.netG(torch.cat([self.real_A, self.style], dim=1))
         self.fake_B = self.tanh(fake_BC[:, 0:3])
-        self.fake_C = (fake_BC[:, 3:4])+(self.real_A if self.add_real else 0)
+        self.fake_C = (fake_BC[:, 3:4]) + (self.real_A if self.add_real else 0)
 
 #         if test:
 #             "make visuals fit visdom"
@@ -257,10 +232,9 @@ class VAEPix2Pix2Model(BaseModel):
         # self.loss_KLD = self.netS.loss(self.beta*(min(1, (0.001+((self.epoch-1) % 100)/50.0))
         #                                if self.epoch > self.start_var else 0.001))  # periodic beta sceduling
         
-        self.loss_KLD = self.netS.loss(self.beta)  # constant beta value
 
         # combine loss and calculate gradients
-        self.loss_G = self.loss_G_GAN + self.loss_G_L1 + self.loss_KLD
+        self.loss_G = self.loss_G_GAN + self.loss_G_L1
         self.loss_G.backward()
 
     def optimize_parameters(self):

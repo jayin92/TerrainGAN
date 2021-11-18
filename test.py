@@ -34,6 +34,56 @@ from models import create_model
 from util.visualizer import save_images
 from util import html
 
+import torch.nn as nn
+from statistics import *
+from PIL import Image
+from torchvision import transforms
+
+loader = transforms.ToTensor()
+
+def image_loader(path, device="cuda:1"):
+    img = Image.open(path).convert("RGB")
+    img = loader(img).unsqueeze(0)
+    img *= 255 # (0, 1) -> (0, 255)
+
+    return img.to(device, torch.float)
+
+def cal_single_loss(path1, path2):
+    t1 = image_loader(path1)
+    t2 = image_loader(path2)
+
+    L1 = nn.L1Loss()
+    L2 = nn.MSELoss()
+
+    return (L1(t1, t2).item(), L2(t1, t2).item())
+
+def cal_folder_loss(path):
+    imgs = sorted(os.listdir(path))
+    hei_l1 = []
+    hei_l2 = []
+    sat_l1 = []
+    sat_l2 = []
+    cnt = 0
+    # for i in range(0, len(imgs), 7):
+    #     l1, l2 = cal_single_loss(os.path.join(path, imgs[i+1]), os.path.join(path, imgs[i+6]))
+    #     hei_l1.append(l1)
+    #     hei_l2.append(l2)
+    #     l1, l2 = cal_single_loss(os.path.join(path, imgs[i]), os.path.join(path, imgs[i+5]))
+    #     sat_l1.append(l1)
+    #     sat_l2.append(l2)
+
+    for i in range(0, len(imgs), 5):
+        l1, l2 = cal_single_loss(os.path.join(path, imgs[i+1]), os.path.join(path, imgs[i+4]))
+        hei_l1.append(l1)
+        hei_l2.append(l2)
+        l1, l2 = cal_single_loss(os.path.join(path, imgs[i]), os.path.join(path, imgs[i+3]))
+        sat_l1.append(l1)
+        sat_l2.append(l2)
+
+    print(f"Avg. Loss for heightmaps: (L1, L2, L1 std, L2 std) = ({round(mean(hei_l1), 3)}, {round(mean(hei_l2), 3)}, {round(pstdev(hei_l1), 3)}, {round(pstdev(hei_l2), 3)})")
+    print(f"Avg. Loss for satellite : (L1, L2, L1 std, L2 std) = ({round(mean(sat_l1), 3)}, {round(mean(sat_l2), 3)}, {round(pstdev(sat_l1), 3)}, {round(pstdev(sat_l2), 3)})")
+
+
 
 if __name__ == '__main__':
     start = torch.cuda.Event(enable_timing=True)
@@ -74,5 +124,7 @@ if __name__ == '__main__':
             print('processing (%04d)-th image... %s' % (i, img_path))
         save_images(webpage, visuals, img_path, aspect_ratio=opt.aspect_ratio, width=opt.display_winsize)
     webpage.save()  # save the HTML
+
     print("Time per image: {} ms".format(res / min(opt.num_test, len(dataset))))
-    
+    path = f"results/{opt.name}/{opt.phase}_{opt.epoch}/images"
+    cal_folder_loss(path)
