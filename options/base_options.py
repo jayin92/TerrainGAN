@@ -57,9 +57,13 @@ class BaseOptions():
         parser.add_argument('--attention', action='store_true', help='use self attention')
         parser.add_argument('--mult_skip_conn', action='store_true', help='multiplying skip connection')
         parser.add_argument('--useVAE3', action='store_true', help='vae with skip conn')
-        parser.add_argument('--use_bias_anyway', action='store_true', help='use bias whether batchnorm is used')
+        parser.add_argument('--use_bias_anyway', action='store_true', help='use bias wheth er batchnorm is used')
         parser.add_argument('--add_real', action='store_true', help='u')
         parser.add_argument('--align_minmax', action='store_true', help='u')
+        parser.add_argument('--cnn_filter_size', type=int, nargs='+', default=[64, 128, 256, 256, 128, 64], help='filter size in CNN')
+        parser.add_argument('--cnn_out_dim', type=int, default=8, help='output dim of CNN')
+        parser.add_argument('--cnn_num_layer', type=int, default=8, help='output dim of CNN')
+
         self.initialized = True
         return parser
 

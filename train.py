@@ -19,6 +19,7 @@ See training and test tips at: https://github.com/junyanz/pytorch-CycleGAN-and-p
 See frequently asked questions at: https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix/blob/master/docs/qa.md
 """
 import time
+import wandb
 from options.train_options import TrainOptions
 from data import create_dataset
 from models import create_model
@@ -26,6 +27,7 @@ from util.visualizer import Visualizer
 
 if __name__ == '__main__':
     opt = TrainOptions().parse()   # get training options
+    wandb.init(project="TerrainGAN", entity="jayinnn", config=vars(opt), name=opt.name)
     dataset = create_dataset(opt)  # create a dataset given opt.dataset_mode and other options
     dataset_size = len(dataset)    # get the number of images in the dataset.
     print('The number of training images = %d' % dataset_size)
@@ -57,6 +59,17 @@ if __name__ == '__main__':
                 save_result = total_iters % opt.update_html_freq == 0
                 model.compute_visuals()
                 visualizer.display_current_results(model.get_current_visuals(), epoch, save_result)
+                path = f"checkpoints/{opt.name}/web/images"
+                img_log = {
+                    "epoch": epoch + float(epoch_iter) / dataset_size, 
+                    "real_A": wandb.Image(f"{path}/epoch{epoch:03d}_real_A.png"),
+                    "real_B": wandb.Image(f"{path}/epoch{epoch:03d}_real_B.png"),
+                    "real_C": wandb.Image(f"{path}/epoch{epoch:03d}_real_C.png"),
+                    "fake_B": wandb.Image(f"{path}/epoch{epoch:03d}_fake_B.png"),
+                    "fake_C": wandb.Image(f"{path}/epoch{epoch:03d}_fake_C.png"),
+
+                }
+                wandb.log(img_log)
 
             if total_iters % opt.print_freq == 0:    # print training losses and save logging information to the disk
                 losses = model.get_current_losses()
@@ -64,6 +77,8 @@ if __name__ == '__main__':
                 visualizer.print_current_losses(epoch, epoch_iter, losses, t_comp, t_data)
                 if opt.display_id > 0:
                     visualizer.plot_current_losses(epoch, float(epoch_iter) / dataset_size, losses)
+                losses['epoch'] = epoch + float(epoch_iter) / dataset_size
+                wandb.log(losses)
 
             if total_iters % opt.save_latest_freq == 0:   # cache our latest model every <save_latest_freq> iterations
                 print('saving the latest model (epoch %d, total_iters %d)' % (epoch, total_iters))
@@ -78,3 +93,4 @@ if __name__ == '__main__':
 
         print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, opt.niter + opt.niter_decay, time.time() - epoch_start_time))
         model.update_learning_rate()                     # update learning rates at the end of every epoch.
+        

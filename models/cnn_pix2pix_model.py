@@ -92,9 +92,9 @@ class CNNPix2PixModel(BaseModel):
         # vae_nc=[32,64,128,256,256,256,8,8]
         # vae_nc=[64,128,256,512,512,512,512]
         # vae_nc = np.array([1, 2, 4, 8, 8, 8, 8, 8]) * 32
-        self.out_dim = 8
+        self.out_dim = opt.cnn_out_dim
         self.netS = networks.MyDataParallel(networks.CNNEncoder(in_w=256, in_h=256, out_w=256, out_h=256, in_dim=4, out_dim=self.out_dim, 
-                                            num_layer=8, num_filter=[64, 128, 256, 256, 128, 64]), self.gpu_ids)
+                                            num_layer=opt.cnn_num_layer, num_filter=opt.cnn_filter_size), self.gpu_ids)
 
         self.netG = networks.define_G(1 + self.out_dim, 4, opt.ngf, opt.netG, opt.norm, not opt.no_dropout, opt.init_type,
                                       opt.init_gain, self.gpu_ids, att=opt.attention, multsc=opt.mult_skip_conn, use_bias_anyway=opt.use_bias_anyway)
