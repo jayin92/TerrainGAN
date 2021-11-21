@@ -59,17 +59,7 @@ if __name__ == '__main__':
                 save_result = total_iters % opt.update_html_freq == 0
                 model.compute_visuals()
                 visualizer.display_current_results(model.get_current_visuals(), epoch, save_result)
-                path = f"checkpoints/{opt.name}/web/images"
-                img_log = {
-                    "epoch": epoch + float(epoch_iter) / dataset_size, 
-                    "real_A": wandb.Image(f"{path}/epoch{epoch:03d}_real_A.png"),
-                    "real_B": wandb.Image(f"{path}/epoch{epoch:03d}_real_B.png"),
-                    "real_C": wandb.Image(f"{path}/epoch{epoch:03d}_real_C.png"),
-                    "fake_B": wandb.Image(f"{path}/epoch{epoch:03d}_fake_B.png"),
-                    "fake_C": wandb.Image(f"{path}/epoch{epoch:03d}_fake_C.png"),
-
-                }
-                wandb.log(img_log)
+               
 
             if total_iters % opt.print_freq == 0:    # print training losses and save logging information to the disk
                 losses = model.get_current_losses()
@@ -93,4 +83,16 @@ if __name__ == '__main__':
 
         print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, opt.niter + opt.niter_decay, time.time() - epoch_start_time))
         model.update_learning_rate()                     # update learning rates at the end of every epoch.
+
+        # path = f"checkpoints/{opt.name}/web/images"
+        # img_log = {
+        #     "epoch": epoch + float(epoch_iter) / dataset_size, 
+        #     "real_A": wandb.Image(f"{path}/epoch{epoch:03d}_real_A.png"),
+        #     "real_B": wandb.Image(f"{path}/epoch{epoch:03d}_real_B.png"),
+        #     "real_C": wandb.Image(f"{path}/epoch{epoch:03d}_real_C.png"),
+        #     "fake_B": wandb.Image(f"{path}/epoch{epoch:03d}_fake_B.png"),
+        #     "fake_C": wandb.Image(f"{path}/epoch{epoch:03d}_fake_C.png"),
+
+        # }
+        # wandb.log(img_log)
         

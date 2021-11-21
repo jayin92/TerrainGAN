@@ -1269,6 +1269,7 @@ class CNNEncoder(nn.Module):
         for i in range(len(num_filter)-1):
             layer.append(nn.LeakyReLU())
             layer.append(nn.Conv2d(in_channels=num_filter[i], out_channels=num_filter[i+1], kernel_size=4, stride=2, padding=1)) # cut in half
+            layer.append(nn.BatchNorm2d(num_filter[i+1]))
             # layer.append(nn.Conv2d(in_channels=num_filter[i], out_channels=num_filter[i+1], kernel_size=5, stride=1, padding=2))
 
 
