@@ -16,6 +16,7 @@ In this study, we use NASA’s SRTM 1 Arc-Second dataset to collect altitude map
 ## Demo 影片 Demo Videos
 
 [![](https://img.youtube.com/vi/_KUc9yIQjCA/0.jpg)](https://www.youtube.com/watch?v=_KUc9yIQjCA)
+[![](https://img.youtube.com/vi/jkLDuj1-Efw/0.jpg)](https://youtu.be/jkLDuj1-Efw)
 
 
 ## 獎項 Awards
