@@ -13,7 +13,7 @@ In this study, we use NASA’s SRTM 1 Arc-Second dataset to collect altitude map
 ## 資料集 Datasets
 [https://github.com/jayin92/pixpix-terrain-generator-datasets](https://github.com/jayin92/pix2pix-terrain-generator-datasets)
 
-## Demo 影片 Demo Videos
+## Demo 影片 Demo Videos (English Caption Provided)
 
 [![](https://img.youtube.com/vi/_KUc9yIQjCA/0.jpg)](https://www.youtube.com/watch?v=_KUc9yIQjCA)
 [![](https://img.youtube.com/vi/jkLDuj1-Efw/0.jpg)](https://youtu.be/jkLDuj1-Efw)
